@@ -140,7 +140,7 @@ git clone https://github.com/yourusername/finlyze.git
 cd finlyze
 ```
 
-### **Step 2: Create Virtual Environment (Recommended)**
+### **Step 2: Create Virtual Environment**
 ```bash
 # Windows
 python -m venv venv
@@ -226,16 +226,16 @@ The app will open in your browser at `http://localhost:8501`
 - **Output:** Text report + downloadable PDF
 
 ---
-
-## 💡 **Why This Project Stands Out**
+<!-- 
+## 💡 **Why This Project Stands Out** -->
 
 ### **For Recruiters**
-✅ **Production-Grade Agentic AI** - Demonstrates expertise in multi-agent systems with LangGraph
-✅ **Full-Stack Development** - Covers frontend (Streamlit), backend (Python), and AI integration
-✅ **Real-World Application** - Solves actual investment research problems
-✅ **Robust Error Handling** - Graceful degradation when data is unavailable
-✅ **State Management** - Persistent UI state across interactions
-✅ **Modular Design** - Easy to extend with new features
+### **Production-Grade Agentic AI** - Demonstrates expertise in multi-agent systems with LangGraph
+### **Full-Stack Development** - Covers frontend (Streamlit), backend (Python), and AI integration
+### **Real-World Application** - Solves actual investment research problems
+### **Robust Error Handling** - Graceful degradation when data is unavailable
+### **State Management** - Persistent UI state across interactions
+### **Modular Design** - Easy to extend with new features
 
 ### **Technical Achievements**
 - Complex state management across multiple agents
@@ -279,66 +279,6 @@ period="6mo"  # Change to "1mo", "3mo", "1y", "5y", "max"
 6. Add environment variable: `GEMINI_API_KEY`
 7. Deploy!
 
-### **Deploy on Streamlit Cloud**
-1. Push code to GitHub
-2. Visit [share.streamlit.io](https://share.streamlit.io)
-3. Connect your repository
-4. Add secrets (GEMINI_API_KEY)
-5. Deploy!
-
----
-
-## 🧪 **Testing**
-
-### **Run the test script**
-```bash
-python test_gemini.py  # Test Gemini API connection
-python test_news.py    # Test DuckDuckGo news search
-python test_env.py     # Test environment variables
-```
-
-### **Manual Testing**
-```bash
-streamlit run app.py
-# Test with AAPL, MSFT, TSLA
-# Verify all three agents complete
-# Check PDF download
-# Verify expanders stay open after downloads
-```
-
----
-
-## 🤝 **Contributing**
-
-Contributions are welcome! Here's how you can help:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-### **Ideas for Contributions**
-- Add more data sources (Alpha Vantage, Finnhub)
-- Implement multi-stock comparison
-- Add portfolio tracking
-- Create mobile app version
-- Add email report delivery
-- Integrate with trading platforms
-
----
-
-## 📝 **License**
-
-Distributed under the MIT License. See `LICENSE` for more information.
-
----
-
-## 📧 **Contact**
-
-**Your Name** - [@yourtwitter](https://twitter.com/yourtwitter) - email@example.com
-
-**Project Link**: [https://github.com/yourusername/finlyze](https://github.com/yourusername/finlyze)
 
 ---
 
