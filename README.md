@@ -1,14 +1,14 @@
 # Finlyze 📊🤖
 
 **AI-Powered Multi-Agent Stock Analysis Platform**
+https://finlyze.onrender.com/)
+
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.38%2B-red)](https://streamlit.io)
 [![LangGraph](https://img.shields.io/badge/LangGraph-1.0%2B-green)](https://langchain.ai)
 [![Gemini AI](https://img.shields.io/badge/Gemini-AI-orange)](https://deepmind.google/technologies/gemini/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![demo url](https://finlyze.onrender.com/)
-
 ---
 
 ## 🎯 **One-Liner Description**
