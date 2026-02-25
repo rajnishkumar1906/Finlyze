@@ -7,6 +7,7 @@
 [![LangGraph](https://img.shields.io/badge/LangGraph-1.0%2B-green)](https://langchain.ai)
 [![Gemini AI](https://img.shields.io/badge/Gemini-AI-orange)](https://deepmind.google/technologies/gemini/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![demo url](https://finlyze.onrender.com/)
 
 ---
 
