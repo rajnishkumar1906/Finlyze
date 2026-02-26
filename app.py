@@ -7,6 +7,7 @@ import time
 import pandas as pd
 import zipfile
 from io import BytesIO
+import traceback
 
 # Load environment variables
 load_dotenv()
@@ -50,15 +51,35 @@ if 'research_preview' not in st.session_state:
     st.session_state.research_preview = None
 if 'analysis_preview' not in st.session_state:
     st.session_state.analysis_preview = None
+if 'research_data' not in st.session_state:
+    st.session_state.research_data = None
+if 'analysis_data' not in st.session_state:
+    st.session_state.analysis_data = None
+if 'writer_data' not in st.session_state:
+    st.session_state.writer_data = None
+if 'current_step' not in st.session_state:
+    st.session_state.current_step = 0
+if 'pdf_generated' not in st.session_state:
+    st.session_state.pdf_generated = False
+if 'pdf_path' not in st.session_state:
+    st.session_state.pdf_path = None
+if 'processing' not in st.session_state:
+    st.session_state.processing = False
+if 'research_complete' not in st.session_state:
+    st.session_state.research_complete = False
+if 'analysis_complete' not in st.session_state:
+    st.session_state.analysis_complete = False
+if 'writer_complete' not in st.session_state:
+    st.session_state.writer_complete = False
 
 # Initialize expander states
 if 'expander_states' not in st.session_state:
     st.session_state.expander_states = {
-        'view_all_metrics': False,         #Stored the metrics used to evaluate the analysis
-        'view_raw_json': False,            #News data scrapped from financial news platfomrs like yahoo
-        'view_agent_messages': False,      #Agents response message
+        'view_all_metrics': False,
+        'view_raw_json': False,
+        'view_agent_messages': False,
         'additional_charts': False,
-        'view_news_items': {}  # Will store state for each news item
+        'view_news_items': {}
     }
 
 st.markdown("""
@@ -147,6 +168,14 @@ st.markdown("""
         border: 1px solid #E5E7EB;
         margin: 1rem 0;
     }
+    .phase-divider {
+        margin: 2rem 0;
+        padding: 0.5rem;
+        background-color: #F0F2F6;
+        border-radius: 0.5rem;
+        text-align: center;
+        font-weight: 600;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -194,6 +223,21 @@ with st.sidebar:
         st.markdown("🟡 **Writer:** ⏳ Working...")
     else:
         st.markdown("⚪ **Writer:** ⏳ Pending")
+    
+    # Progress indicator
+    st.markdown("---")
+    st.markdown("### 📊 Overall Progress")
+    progress_bar_sidebar = st.progress(st.session_state.current_step / 3)
+    
+    # Add step text
+    if st.session_state.current_step == 0:
+        st.caption("⏳ Waiting to start...")
+    elif st.session_state.current_step == 1:
+        st.caption("🔍 Research in progress...")
+    elif st.session_state.current_step == 2:
+        st.caption("📊 Analysis in progress...")
+    elif st.session_state.current_step == 3:
+        st.caption("✅ Analysis complete!")
     
     st.markdown("---")
     
@@ -243,7 +287,7 @@ with col2:
 
 with col3:
     st.markdown("<br>", unsafe_allow_html=True)
-    analyze_button = st.button("🔍 Analyze Stock", type="primary", width='stretch')
+    analyze_button = st.button("🔍 Analyze Stock", type="primary", use_container_width=True)
 
 # Reset agent status when new analysis starts
 if analyze_button:
@@ -252,8 +296,18 @@ if analyze_button:
         'analyst': 'pending',
         'writer': 'pending'
     }
+    st.session_state.current_step = 0
     st.session_state.research_preview = None
     st.session_state.analysis_preview = None
+    st.session_state.research_data = None
+    st.session_state.analysis_data = None
+    st.session_state.writer_data = None
+    st.session_state.pdf_generated = False
+    st.session_state.pdf_path = None
+    st.session_state.processing = True
+    st.session_state.research_complete = False
+    st.session_state.analysis_complete = False
+    st.session_state.writer_complete = False
 
 # Main analysis section
 if analyze_button and ticker:
@@ -263,151 +317,226 @@ if analyze_button and ticker:
         # Clean ticker
         clean_ticker_symbol = clean_ticker(ticker)
         
-        # Create progress container
-        progress_container = st.container()
+        # Create containers for sequential display
+        research_container = st.container()
+        analysis_container = st.container()
+        writer_container = st.container()
         
-        with progress_container:
-            st.markdown('<div class="info-box">', unsafe_allow_html=True)
-            st.markdown(f"### 🚀 Starting analysis for {clean_ticker_symbol}")
-            
-            # Progress bar
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            # Initialize workflow
-            if 'workflow' not in st.session_state or st.session_state.workflow is None:
-                with st.spinner("Initializing AI agents..."):
-                    st.session_state.workflow = FinlyzeWorkflow()
-                    time.sleep(1)
-            
-            # Create placeholders for real-time updates
-            researcher_placeholder = st.empty()
-            analyst_placeholder = st.empty()
-            writer_placeholder = st.empty()
-            data_preview_placeholder = st.empty()
-            
-            # Run workflow
-            try:
-                # Step 1: Researcher
-                status_text.text("Step 1/3: Researching news and sentiment...")
-                progress_bar.progress(20)
+        # Initialize workflow
+        if 'workflow' not in st.session_state or st.session_state.workflow is None:
+            with st.spinner("Initializing AI agents..."):
+                st.session_state.workflow = FinlyzeWorkflow()
+                time.sleep(1)
+        
+        # ===== SEQUENTIAL PROCESSING =====
+        # Step 1: Research Agent
+        if not st.session_state.research_complete:
+            with research_container:
+                st.markdown('<div class="info-box">', unsafe_allow_html=True)
+                st.markdown(f"### 🔍 Phase 1: Researching {clean_ticker_symbol}")
+                
+                # Progress bar
+                progress_bar = st.progress(20)
+                status_text = st.empty()
+                
+                # Researcher status
+                researcher_placeholder = st.empty()
+                
+                status_text.text("Gathering news and sentiment...")
                 st.session_state.agent_status['researcher'] = 'working'
                 researcher_placeholder.markdown('<div class="agent-working">🔍 Researcher Agent: Gathering news & sentiment...</div>', unsafe_allow_html=True)
                 
-                # Run the workflow
-                results = st.session_state.workflow.run(clean_ticker_symbol, company_name)
+                # Run researcher
+                research_data = st.session_state.workflow.researcher.research(clean_ticker_symbol, company_name)
+                st.session_state.research_data = research_data
                 
-                # Update based on results
-                messages = results.get('messages', [])
+                # Update researcher status
+                st.session_state.agent_status['researcher'] = 'completed'
+                researcher_placeholder.markdown('<div class="agent-complete">✅ Researcher Agent: News & Sentiment Analysis Complete!</div>', unsafe_allow_html=True)
+                progress_bar.progress(40)
+                st.session_state.current_step = 1
+                st.session_state.research_complete = True
                 
-                for msg in messages:
-                    if "research" in msg.lower() and "complete" in msg.lower():
-                        st.session_state.agent_status['researcher'] = 'completed'
-                        researcher_placeholder.markdown('<div class="agent-complete">✅ Researcher Agent: News & Sentiment Analysis Complete!</div>', unsafe_allow_html=True)
-                        
-                        # Show research preview
-                        research_data = results.get('research_data', {})
-                        news_data = research_data.get('news_data', {})
-                        sentiment = news_data.get('sentiment', {})
-                        
-                        with data_preview_placeholder.container():
-                            st.markdown('<div class="data-preview">', unsafe_allow_html=True)
-                            st.markdown("### 📰 Research Findings")
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("News Articles", len(news_data.get('news', [])))
-                            with col2:
-                                st.metric("Sentiment", sentiment.get('overall', 'neutral').upper())
-                            with col3:
-                                pos = sentiment.get('positive_count', 0)
-                                neg = sentiment.get('negative_count', 0)
-                                st.metric("Pos/Neg", f"{pos}/{neg}")
-                            st.markdown('</div>', unsafe_allow_html=True)
-                        
-                        status_text.text("Step 2/3: Analyzing financial data...")
-                        progress_bar.progress(50)
-                        
-                    elif "analysis" in msg.lower() and "complete" in msg.lower():
-                        st.session_state.agent_status['analyst'] = 'completed'
-                        analyst_placeholder.markdown('<div class="agent-complete">📊 Analyst Agent: Financial Analysis Complete!</div>', unsafe_allow_html=True)
-                        
-                        # Show analysis preview
-                        analysis_data = results.get('analysis_data', {})
-                        financial_data = analysis_data.get('financial_data', {})
-                        
-                        with data_preview_placeholder.container():
-                            st.markdown('<div class="data-preview">', unsafe_allow_html=True)
-                            st.markdown("### 📈 Analysis Findings")
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                price = financial_data.get('current_price', 0)
-                                st.metric("Current Price", f"${price:.2f}" if price else "N/A")
-                            with col2:
-                                market_cap = financial_data.get('market_cap', 0)
-                                if market_cap:
-                                    if market_cap >= 1e9:
-                                        cap_str = f"${market_cap/1e9:.2f}B"
-                                    else:
-                                        cap_str = f"${market_cap/1e6:.2f}M"
-                                    st.metric("Market Cap", cap_str)
-                                else:
-                                    st.metric("Market Cap", "N/A")
-                            with col3:
-                                pe = financial_data.get('pe_ratio')
-                                st.metric("P/E Ratio", f"{pe:.2f}" if pe else "N/A")
-                            st.markdown('</div>', unsafe_allow_html=True)
-                        
-                        status_text.text("Step 3/3: Writing final report...")
-                        progress_bar.progress(80)
-                        
-                    elif "report" in msg.lower() and "complete" in msg.lower():
-                        st.session_state.agent_status['writer'] = 'completed'
-                        writer_placeholder.markdown('<div class="agent-complete">✍️ Writer Agent: Report Generation Complete!</div>', unsafe_allow_html=True)
-                        status_text.text("✅ Analysis complete!")
-                        progress_bar.progress(100)
-                        
-                        # Show final preview
-                        writer_data = results.get('writer_data', {})
-                        recommendation = writer_data.get('recommendation', {})
-                        
-                        with data_preview_placeholder.container():
-                            st.markdown('<div class="data-preview">', unsafe_allow_html=True)
-                            st.markdown("### 📋 Final Recommendation")
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("Rating", recommendation.get('rating', 'HOLD'))
-                            with col2:
-                                st.metric("Confidence", recommendation.get('confidence', 'Medium'))
-                            with col3:
-                                target = recommendation.get('target_price')
-                                if target:
-                                    st.metric("Target Price", f"${target:.2f}")
-                                else:
-                                    st.metric("Target Price", "N/A")
-                            st.markdown('</div>', unsafe_allow_html=True)
+                # Show research preview
+                news_data = research_data.get('news_data', {})
+                sentiment = news_data.get('sentiment', {})
                 
-                st.session_state.results = results
+                st.markdown("### 📰 Research Findings")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("News Articles", len(news_data.get('news', [])))
+                with col2:
+                    st.metric("Overall Sentiment", sentiment.get('overall', 'neutral').upper())
+                with col3:
+                    pos = sentiment.get('positive_count', 0)
+                    neg = sentiment.get('negative_count', 0)
+                    st.metric("Pos/Neg", f"{pos}/{neg}")
                 
-                # ✅ FIXED: Agent Messages Expander with state persistence
-                messages_expanded = st.session_state.expander_states.get('view_agent_messages', False)
-                view_messages = st.expander("View Agent Messages", expanded=messages_expanded)
-                
-                with view_messages:
-                    for msg in messages:
-                        st.markdown(f"- {msg}")
-                
-                # Save expander state AFTER
-                st.session_state.expander_states['view_agent_messages'] = view_messages.expanded
+                # Key developments
+                st.markdown("#### 🔑 Key Developments")
+                developments = research_data.get('key_developments', [])
+                if developments:
+                    for dev in developments[:3]:
+                        st.markdown(f"• {dev}")
+                else:
+                    st.markdown("*No key developments extracted*")
                 
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-            except Exception as e:
-                st.error(f"Analysis failed: {str(e)}")
-                st.session_state.results = None
+                time.sleep(1)
+            
+            st.markdown('<div class="phase-divider">⬇️ Phase 2 Starting...</div>', unsafe_allow_html=True)
+        
+        # Step 2: Analyst Agent
+        if st.session_state.research_complete and not st.session_state.analysis_complete:
+            with analysis_container:
+                st.markdown('<div class="info-box">', unsafe_allow_html=True)
+                st.markdown(f"### 📊 Phase 2: Analyzing {clean_ticker_symbol}")
+                
+                # Progress bar
+                progress_bar = st.progress(50)
+                status_text = st.empty()
+                
+                # Analyst status
+                analyst_placeholder = st.empty()
+                
+                status_text.text("Fetching financial data and generating charts...")
+                st.session_state.agent_status['analyst'] = 'working'
+                analyst_placeholder.markdown('<div class="agent-working">📊 Analyst Agent: Analyzing financial data...</div>', unsafe_allow_html=True)
+                
+                # Run analyst
+                analysis_data = st.session_state.workflow.analyst.analyze(clean_ticker_symbol)
+                st.session_state.analysis_data = analysis_data
+                
+                # Update analyst status
+                st.session_state.agent_status['analyst'] = 'completed'
+                analyst_placeholder.markdown('<div class="agent-complete">📊 Analyst Agent: Financial Analysis Complete!</div>', unsafe_allow_html=True)
+                progress_bar.progress(70)
+                st.session_state.current_step = 2
+                st.session_state.analysis_complete = True
+                
+                # Show analysis preview
+                financial_data = analysis_data.get('financial_data', {})
+                
+                st.markdown("### 📈 Analysis Findings")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    price = financial_data.get('current_price', 0)
+                    st.metric("Current Price", f"${price:.2f}" if price else "N/A")
+                with col2:
+                    market_cap = financial_data.get('market_cap', 0)
+                    if market_cap:
+                        if market_cap >= 1e9:
+                            cap_str = f"${market_cap/1e9:.2f}B"
+                        else:
+                            cap_str = f"${market_cap/1e6:.2f}M"
+                        st.metric("Market Cap", cap_str)
+                    else:
+                        st.metric("Market Cap", "N/A")
+                with col3:
+                    pe = financial_data.get('pe_ratio')
+                    st.metric("P/E Ratio", f"{pe:.2f}" if pe else "N/A")
+                
+                # Show charts
+                chart_paths = analysis_data.get('chart_paths', [])
+                if chart_paths:
+                    st.markdown("#### 📈 Charts")
+                    chart_col1, chart_col2 = st.columns(2)
+                    with chart_col1:
+                        if len(chart_paths) > 0 and os.path.exists(chart_paths[0]):
+                            st.image(chart_paths[0], use_container_width=True)
+                    with chart_col2:
+                        if len(chart_paths) > 1 and os.path.exists(chart_paths[1]):
+                            st.image(chart_paths[1], use_container_width=True)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                time.sleep(1)
+            
+            st.markdown('<div class="phase-divider">⬇️ Phase 3 Starting...</div>', unsafe_allow_html=True)
+        
+        # Step 3: Writer Agent
+        if st.session_state.analysis_complete and not st.session_state.writer_complete:
+            with writer_container:
+                st.markdown('<div class="info-box">', unsafe_allow_html=True)
+                st.markdown(f"### ✍️ Phase 3: Generating Report for {clean_ticker_symbol}")
+                
+                # Progress bar
+                progress_bar = st.progress(80)
+                status_text = st.empty()
+                
+                # Writer status
+                writer_placeholder = st.empty()
+                
+                status_text.text("Synthesizing data and creating report...")
+                st.session_state.agent_status['writer'] = 'working'
+                writer_placeholder.markdown('<div class="agent-working">✍️ Writer Agent: Generating report...</div>', unsafe_allow_html=True)
+                
+                # Run writer
+                writer_data = st.session_state.workflow.writer.write_report(
+                    clean_ticker_symbol, 
+                    st.session_state.research_data, 
+                    st.session_state.analysis_data
+                )
+                st.session_state.writer_data = writer_data
+                
+                # Update writer status
+                st.session_state.agent_status['writer'] = 'completed'
+                writer_placeholder.markdown('<div class="agent-complete">✍️ Writer Agent: Report Generation Complete!</div>', unsafe_allow_html=True)
+                progress_bar.progress(100)
+                status_text.text("✅ Analysis complete!")
+                st.session_state.current_step = 3
+                st.session_state.pdf_path = writer_data.get('pdf_path')
+                st.session_state.pdf_generated = True
+                st.session_state.writer_complete = True
+                st.session_state.processing = False
+                
+                # Show final preview
+                recommendation = writer_data.get('recommendation', {})
+                
+                st.markdown("### 📋 Final Recommendation")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Rating", recommendation.get('rating', 'HOLD'))
+                with col2:
+                    st.metric("Confidence", recommendation.get('confidence', 'Medium'))
+                with col3:
+                    target = recommendation.get('target_price')
+                    if target:
+                        st.metric("Target Price", f"${target:.2f}")
+                    else:
+                        st.metric("Target Price", "N/A")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Store complete results
+            st.session_state.results = {
+                'research_data': st.session_state.research_data,
+                'analysis_data': st.session_state.analysis_data,
+                'writer_data': writer_data,
+                'writer_status': 'completed',
+                'pdf_path': st.session_state.pdf_path
+            }
+            
+            # Display agent messages
+            messages_expanded = st.session_state.expander_states.get('view_agent_messages', False)
+            view_messages = st.expander("View Agent Messages", expanded=messages_expanded)
+            with view_messages:
+                st.markdown(f"- Started analysis for {clean_ticker_symbol}")
+                st.markdown("- ✅ Researcher Agent: News & Sentiment Analysis Complete!")
+                st.markdown("- ✅ Analyst Agent: Financial Analysis Complete!")
+                st.markdown("- ✅ Writer Agent: Report Generation Complete!")
+                if st.session_state.pdf_path:
+                    st.markdown(f"- 📄 PDF generated at: {st.session_state.pdf_path}")
+            
+            st.session_state.expander_states['view_agent_messages'] = view_messages.expanded
         
         # Display full results in tabs if available
         if st.session_state.results and st.session_state.results.get('writer_status') == 'completed':
             results = st.session_state.results
+            research_data = results.get('research_data', {})
+            analysis_data = results.get('analysis_data', {})
+            writer_data = results.get('writer_data', {})
             
             # Create tabs for different views
             tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Summary", "📰 News", "📈 Financials", "📊 Data Export", "📄 Report"])
@@ -495,7 +624,7 @@ if analyze_button and ticker:
                     st.markdown('<p class="metric-label">Neutral Articles</p>', unsafe_allow_html=True)
                     st.markdown('</div>', unsafe_allow_html=True)
                 
-                # ✅ FIXED: News list with persistent expanders
+                # News list with persistent expanders
                 st.markdown("### Recent News")
                 news_items = news_data.get('news', [])
                 
@@ -588,7 +717,7 @@ if analyze_button and ticker:
                 
                 st.markdown("---")
                 
-                # 📊 GRAPHS SECTION
+                # GRAPHS SECTION
                 st.markdown("### 📈 Price & Volume Charts")
                 
                 chart_paths = analysis_data.get('chart_paths', [])
@@ -599,7 +728,7 @@ if analyze_button and ticker:
                     
                     with chart_tab1:
                         if len(chart_paths) > 0 and os.path.exists(chart_paths[0]):
-                            st.image(chart_paths[0], width='stretch')
+                            st.image(chart_paths[0], use_container_width=True)
                             
                             st.markdown("""
                             <div style='background-color: #F3F4F6; padding: 0.5rem; border-radius: 0.5rem; font-size: 0.9rem;'>
@@ -616,14 +745,14 @@ if analyze_button and ticker:
                                     data=chart_file,
                                     file_name=os.path.basename(chart_paths[0]),
                                     mime="image/png",
-                                    width='stretch'
+                                    use_container_width=True
                                 )
                         else:
                             st.info("Price chart not available")
                     
                     with chart_tab2:
                         if len(chart_paths) > 1 and os.path.exists(chart_paths[1]):
-                            st.image(chart_paths[1], width='stretch')
+                            st.image(chart_paths[1], use_container_width=True)
                             
                             st.markdown("""
                             <div style='background-color: #F3F4F6; padding: 0.5rem; border-radius: 0.5rem; font-size: 0.9rem;'>
@@ -639,37 +768,35 @@ if analyze_button and ticker:
                                     data=chart_file,
                                     file_name=os.path.basename(chart_paths[1]),
                                     mime="image/png",
-                                    width='stretch'
+                                    use_container_width=True
                                 )
                         else:
                             st.info("Volume chart not available")
                     
-                    # ✅ FIXED: Additional Charts expander with state persistence
+                    # Additional charts if available
                     if len(chart_paths) > 2:
                         additional_expanded = st.session_state.expander_states.get('additional_charts', False)
                         additional_charts = st.expander("📊 Additional Charts", expanded=additional_expanded)
-                        
                         with additional_charts:
                             for i, chart_path in enumerate(chart_paths[2:], 3):
                                 if os.path.exists(chart_path):
-                                    st.image(chart_path, width='stretch')
+                                    st.image(chart_path, use_container_width=True)
                                     with open(chart_path, "rb") as chart_file:
                                         st.download_button(
                                             label=f"📥 Download Chart {i}",
                                             data=chart_file,
                                             file_name=os.path.basename(chart_path),
                                             mime="image/png",
-                                            width='stretch'
+                                            use_container_width=True
                                         )
                         
-                        # Save expander state AFTER
                         st.session_state.expander_states['additional_charts'] = additional_charts.expanded
                 else:
                     st.warning("No charts available for this ticker")
                 
                 st.markdown("---")
                 
-                # ✅ FIXED: View All Financial Metrics expander with state persistence
+                # View All Financial Metrics expander
                 metrics_expanded = st.session_state.expander_states.get('view_all_metrics', False)
                 view_metrics = st.expander("View All Financial Metrics", expanded=metrics_expanded)
                 
@@ -723,12 +850,10 @@ if analyze_button and ticker:
                                 else:
                                     st.markdown("---")
                 
-                # Save expander state AFTER
                 st.session_state.expander_states['view_all_metrics'] = view_metrics.expanded
                 
                 # Download all charts as ZIP option
                 if chart_paths:
-                    # Create ZIP file in memory
                     zip_buffer = BytesIO()
                     with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
                         for i, chart_path in enumerate(chart_paths):
@@ -743,7 +868,7 @@ if analyze_button and ticker:
                         data=zip_buffer,
                         file_name=f"{clean_ticker_symbol}_charts.zip",
                         mime="application/zip",
-                        width='stretch'
+                        use_container_width=True
                     )
             
             with tab4:
@@ -817,16 +942,15 @@ if analyze_button and ticker:
                             data=csv,
                             file_name=f"{clean_ticker_symbol}_financial_data.csv",
                             mime="text/csv",
-                            width='stretch',
+                            use_container_width=True,
                             type="primary"
                         )
                     
                     st.markdown('</div>', unsafe_allow_html=True)
                 
-                # ✅ FIXED: Raw JSON Data expander with state persistence
+                # Raw JSON Data expander
                 json_expanded = st.session_state.expander_states.get('view_raw_json', False)
                 view_json = st.expander("View Raw JSON Data", expanded=json_expanded)
-                
                 with view_json:
                     st.json({
                         "ticker": clean_ticker_symbol,
@@ -836,7 +960,6 @@ if analyze_button and ticker:
                         "analysis_summary": analysis_data.get('analysis_summary', '')
                     })
                 
-                # Save expander state AFTER
                 st.session_state.expander_states['view_raw_json'] = view_json.expanded
             
             with tab5:
@@ -860,7 +983,7 @@ if analyze_button and ticker:
                     # Display full report
                     report_text = writer_data.get('full_report', 'No report available')
                     
-                    # Show report in an expander (this one can stay expanded=True always)
+                    # Show report in an expander
                     with st.expander("📖 Read Full Report", expanded=True):
                         st.markdown(report_text)
                     
@@ -911,20 +1034,26 @@ if analyze_button and ticker:
                     col1, col2, col3 = st.columns(3)
                     
                     with col1:
-                        # PDF Download
-                        pdf_path = results.get('pdf_path')
+                        # PDF Download - FIXED
+                        pdf_path = st.session_state.pdf_path
                         if pdf_path and os.path.exists(pdf_path):
-                            with open(pdf_path, "rb") as pdf_file:
-                                st.download_button(
-                                    label="📕 Download PDF Report",
-                                    data=pdf_file,
-                                    file_name=os.path.basename(pdf_path),
-                                    mime="application/pdf",
-                                    width='stretch',
-                                    type="primary"
-                                )
+                            try:
+                                with open(pdf_path, "rb") as pdf_file:
+                                    pdf_data = pdf_file.read()
+                                    st.download_button(
+                                        label="📕 Download PDF Report",
+                                        data=pdf_data,
+                                        file_name=os.path.basename(pdf_path),
+                                        mime="application/pdf",
+                                        use_container_width=True,
+                                        type="primary",
+                                        key="pdf_download"
+                                    )
+                            except Exception as e:
+                                st.error(f"Error reading PDF: {str(e)}")
+                                st.button("📕 PDF Error", disabled=True, use_container_width=True)
                         else:
-                            st.button("📕 PDF Unavailable", disabled=True, width='stretch')
+                            st.button("📕 PDF Unavailable", disabled=True, use_container_width=True)
                     
                     with col2:
                         # Text Report Download
@@ -933,7 +1062,8 @@ if analyze_button and ticker:
                             data=report_text,
                             file_name=f"{clean_ticker_symbol}_report.txt",
                             mime="text/plain",
-                            width='stretch'
+                            use_container_width=True,
+                            key="txt_download"
                         )
                     
                     with col3:
@@ -951,7 +1081,8 @@ if analyze_button and ticker:
                             data=markdown_text,
                             file_name=f"{clean_ticker_symbol}_report.md",
                             mime="text/markdown",
-                            width='stretch'
+                            use_container_width=True,
+                            key="md_download"
                         )
                     
                     st.markdown('</div>', unsafe_allow_html=True)

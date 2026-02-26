@@ -29,7 +29,7 @@ class AnalystAgent:
         
         # Initialize Gemini
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model="gemini-2.5-flas",
             google_api_key=self.api_key,
             temperature=0.2,  # Lower temperature for more factual analysis
             convert_system_message_to_human=True

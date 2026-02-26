@@ -27,7 +27,7 @@ class ResearcherAgent:
         
         # Initialize Gemini
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model="gemini-2.5-flash-lite",
             google_api_key=self.api_key,
             temperature=0.3,
             convert_system_message_to_human=True
