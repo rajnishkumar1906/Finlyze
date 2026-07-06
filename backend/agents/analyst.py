@@ -28,8 +28,9 @@ class AnalystAgent:
             raise ValueError("GEMINI_API_KEY is required")
         
         # Initialize Gemini
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flas",
+            model=model_name,
             google_api_key=self.api_key,
             temperature=0.2,  # Lower temperature for more factual analysis
             convert_system_message_to_human=True
@@ -62,9 +63,8 @@ class AnalystAgent:
             # Step 3: Generate charts
             chart_paths = []
             price_chart = generate_price_chart(ticker, financial_data)
-            # Already good, but you could add:
-            if chart_paths:
-                logger.info(f"Generated {len(chart_paths)} charts for {ticker}")
+            if price_chart:
+                chart_paths.append(price_chart)
             
             volume_chart = generate_volume_chart(ticker, financial_data)
             if volume_chart:
@@ -143,8 +143,12 @@ class AnalystAgent:
             
         except Exception as e:
             logger.error(f"Error in LLM analysis: {str(e)}")
+            curr_pr = financial_data.get('current_price')
+            curr_pr_str = f"${curr_pr:.2f}" if curr_pr is not None else "N/A"
+            pe_rat = financial_data.get('pe_ratio')
+            pe_rat_str = f"{pe_rat:.2f}" if pe_rat is not None else "N/A"
             return {
-                'summary': f"Analysis based on financial data. Current price: ${financial_data.get('current_price', 0):.2f}, P/E: {financial_data.get('pe_ratio', 'N/A')}",
+                'summary': f"Analysis based on financial data. Current price: {curr_pr_str}, P/E: {pe_rat_str}",
                 'valuation': 'See summary',
                 'technical': 'See summary',
                 'strengths': [],
@@ -152,35 +156,47 @@ class AnalystAgent:
                 'health': 'Unknown'
             }
     
+    def _safe_format(self, val: Any, fmt: str = ".2f", default: str = "N/A", prefix: str = "", suffix: str = "") -> str:
+        """Safely format values that might be None or NaN without throwing exceptions"""
+        import pandas as pd
+        if val is None or pd.isna(val):
+            return default
+        try:
+            formatted = f"{val:{fmt}}"
+            return f"{prefix}{formatted}{suffix}"
+        except Exception:
+            return default
+
     def _prepare_data_summary(self, financial_data: Dict, metrics: Dict) -> str:
         """Prepare financial data for LLM input"""
+        sf = self._safe_format
         summary = f"""
 Company: {financial_data.get('company_name', 'Unknown')}
 Sector: {financial_data.get('sector', 'Unknown')}
 Industry: {financial_data.get('industry', 'Unknown')}
 
 PRICE DATA:
-- Current Price: ${financial_data.get('current_price', 0):.2f}
-- Day Change: ${financial_data.get('day_change', 0):.2f} ({financial_data.get('day_change_pct', 0):.2f}%)
-- 52-Week High: ${financial_data.get('high_52w', 0):.2f}
-- 52-Week Low: ${financial_data.get('low_52w', 0):.2f}
-- 50-Day MA: ${financial_data.get('ma_50', 0):.2f}
-- 200-Day MA: ${financial_data.get('ma_200', 0):.2f}
-- YTD Change: {financial_data.get('ytd_change_pct', 0):.2f}%
+- Current Price: {sf(financial_data.get('current_price'), '.2f', prefix='$')}
+- Day Change: {sf(financial_data.get('day_change'), '.2f', prefix='$')} ({sf(financial_data.get('day_change_pct'), '.2f', suffix='%')})
+- 52-Week High: {sf(financial_data.get('high_52w'), '.2f', prefix='$')}
+- 52-Week Low: {sf(financial_data.get('low_52w'), '.2f', prefix='$')}
+- 50-Day MA: {sf(financial_data.get('ma_50'), '.2f', prefix='$')}
+- 200-Day MA: {sf(financial_data.get('ma_200'), '.2f', prefix='$')}
+- YTD Change: {sf(financial_data.get('ytd_change_pct'), '.2f', suffix='%')}
 
 VALUATION METRICS:
-- Market Cap: ${financial_data.get('market_cap', 0):,.0f}
-- P/E Ratio: {financial_data.get('pe_ratio', 'N/A')}
-- Forward P/E: {financial_data.get('forward_pe', 'N/A')}
-- EPS: ${financial_data.get('eps', 0):.2f}
-- PEG Ratio: {financial_data.get('peg_ratio', 'N/A')}
+- Market Cap: {sf(financial_data.get('market_cap'), ',.0f', prefix='$')}
+- P/E Ratio: {sf(financial_data.get('pe_ratio'), '.2f')}
+- Forward P/E: {sf(financial_data.get('forward_pe'), '.2f')}
+- EPS: {sf(financial_data.get('eps'), '.2f', prefix='$')}
+- PEG Ratio: {sf(financial_data.get('peg_ratio'), '.2f')}
 
 OTHER METRICS:
-- Beta: {financial_data.get('beta', 'N/A')}
-- Dividend Yield: {financial_data.get('dividend_yield', 0):.2f}%
-- Volume: {financial_data.get('volume', 0):,.0f}
-- Avg Volume: {financial_data.get('avg_volume', 0):,.0f}
-- Target Price (Mean): ${financial_data.get('target_mean', 0):.2f}
+- Beta: {sf(financial_data.get('beta'), '.2f')}
+- Dividend Yield: {sf(financial_data.get('dividend_yield'), '.2f', suffix='%')}
+- Volume: {sf(financial_data.get('volume'), ',.0f')}
+- Avg Volume: {sf(financial_data.get('avg_volume'), ',.0f')}
+- Target Price (Mean): {sf(financial_data.get('target_mean'), '.2f', prefix='$')}
 - Recommendation: {financial_data.get('recommendation', 'N/A')}
 """
         return summary

@@ -1,0 +1,16 @@
+yfinance
+fpdf2
+duckduckgo-search
+Flask
+langchain
+langgraph
+langchain-community
+google-genai
+tenacity
+pillow
+matplotlib
+pandas
+numpy
+requests
+python-dotenv
+langchain-google-genai

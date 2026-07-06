@@ -1,3 +1,37 @@
-__pycache__
+# Python Virtual Environments
+backend/venv/
+backend/.venv/
+venv/
+.venv/
+ENV/
+
+# Python caching
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Local Environment Variables
 .env
-output
+.env.local
+backend/.env
+frontend/.env
+
+# Node.js dependencies
+frontend/node_modules/
+node_modules/
+
+# Production builds
+frontend/dist/
+dist/
+
+# Dynamically generated assets (charts, reports)
+backend/output/
+output/
+
+# Editor / System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

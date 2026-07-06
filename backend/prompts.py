@@ -67,6 +67,8 @@ Your task is to create:
 Format the report professionally with clear sections.
 Be objective and balanced - present both positives and negatives.
 Use specific data points to support your conclusions.
+
+NOTE: If historical price charts, moving averages, or market capitalization metrics are present, the company is publicly traded. Under no circumstances should you state or imply that the company is private, not publicly listed, or that public market analysis/recommendations are inapplicable.
 """
 
 RECOMMENDATION_PROMPT = """Based on the following research and analysis, provide a clear investment recommendation for {ticker}.
@@ -79,6 +81,8 @@ Consider:
 - Sentiment (positive/neutral/negative)
 - Technical trends (bullish/bearish/neutral)
 - Risk factors
+
+NOTE: If price, moving average, or volume charts are present, the asset is publicly traded. Do NOT assume the asset is private or unlisted. You must choose a standard rating (BUY, HOLD, or SELL). Under no circumstances should you state that a rating is inapplicable or that the company is not publicly traded.
 
 Output ONLY in this JSON format:
 {{

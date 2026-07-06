@@ -26,8 +26,9 @@ class ResearcherAgent:
             raise ValueError("GEMINI_API_KEY is required")
         
         # Initialize Gemini
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash-lite",
+            model=model_name,
             google_api_key=self.api_key,
             temperature=0.3,
             convert_system_message_to_human=True

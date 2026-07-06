@@ -13,7 +13,7 @@ from utils.helpers import save_chart, format_currency, format_percentage
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def fetch_stock_data(ticker: str, period: str = "6mo") -> Optional[Dict[str, Any]]:
+def fetch_stock_data(ticker: str, period: str = "1y") -> Optional[Dict[str, Any]]:
     """
     Fetch stock data using yfinance
     """
@@ -102,7 +102,7 @@ def fetch_stock_data(ticker: str, period: str = "6mo") -> Optional[Dict[str, Any
 
 def generate_price_chart(ticker: str, data: Dict[str, Any]) -> Optional[str]:
     """
-    Generate price chart with moving averages
+    Generate price chart with moving averages and a premium dark theme
     """
     try:
         # Extract historical data
@@ -126,21 +126,38 @@ def generate_price_chart(ticker: str, data: Dict[str, Any]) -> Optional[str]:
         df['MA50'] = df['Close'].rolling(window=50).mean()
         df['MA200'] = df['Close'].rolling(window=200).mean()
         
-        # Create chart
-        fig, ax = plt.subplots(figsize=(12, 6))
+        # Create chart with dark theme
+        plt.style.use('dark_background')
+        fig, ax = plt.subplots(figsize=(12, 6), facecolor='#0b0f19')
+        ax.set_facecolor('#0b0f19')
         
-        ax.plot(df.index, df['Close'], label='Close Price', linewidth=2, color='blue')
-        ax.plot(df.index, df['MA50'], label='50-day MA', linewidth=1.5, linestyle='--', color='orange')
-        ax.plot(df.index, df['MA200'], label='200-day MA', linewidth=1.5, linestyle='--', color='red')
+        # Plot price and moving averages
+        ax.plot(df.index, df['Close'], label='Close Price', linewidth=2.2, color='#3b82f6')
+        ax.plot(df.index, df['MA50'], label='50-day MA', linewidth=1.5, linestyle='--', color='#f59e0b')
+        ax.plot(df.index, df['MA200'], label='200-day MA', linewidth=1.5, linestyle='--', color='#ef4444')
         
-        ax.set_title(f'{ticker} - Stock Price with Moving Averages', fontsize=16, fontweight='bold')
-        ax.set_xlabel('Date', fontsize=12)
-        ax.set_ylabel('Price ($)', fontsize=12)
-        ax.legend(loc='best')
-        ax.grid(True, alpha=0.3)
+        # Titles and labels
+        ax.set_title(f'{ticker} - Price Action & Moving Averages', fontsize=14, fontweight='bold', color='#f3f4f6', pad=15)
+        ax.set_xlabel('Date', fontsize=10, color='#9ca3af')
+        ax.set_ylabel('Price ($)', fontsize=10, color='#9ca3af')
         
-        # Format x-axis
-        plt.xticks(rotation=45)
+        # Customize spines (borders)
+        for spine in ax.spines.values():
+            spine.set_color('#1f2937')
+            spine.set_linewidth(1)
+            
+        # Customize grid
+        ax.grid(True, color='#1f2937', linestyle='-', linewidth=0.5, alpha=0.7)
+        
+        # Customize ticks
+        ax.tick_params(colors='#9ca3af', labelsize=9)
+        plt.xticks(rotation=30)
+        
+        # Customize legend
+        legend = ax.legend(loc='best', frameon=True, facecolor='#111827', edgecolor='#1f2937')
+        for text in legend.get_texts():
+            text.set_color('#f3f4f6')
+            
         plt.tight_layout()
         
         # Save chart
@@ -153,7 +170,7 @@ def generate_price_chart(ticker: str, data: Dict[str, Any]) -> Optional[str]:
 
 def generate_volume_chart(ticker: str, data: Dict[str, Any]) -> Optional[str]:
     """
-    Generate volume chart
+    Generate volume chart with a premium dark theme
     """
     try:
         # Extract historical data
@@ -172,18 +189,35 @@ def generate_volume_chart(ticker: str, data: Dict[str, Any]) -> Optional[str]:
             'Volume': volumes
         }).set_index('Date').sort_index()
         
-        # Create chart
-        fig, ax = plt.subplots(figsize=(12, 4))
+        # Create chart with dark theme
+        plt.style.use('dark_background')
+        fig, ax = plt.subplots(figsize=(12, 4), facecolor='#0b0f19')
+        ax.set_facecolor('#0b0f19')
         
-        ax.bar(df.index, df['Volume'], color='green', alpha=0.6, width=0.8)
-        ax.set_title(f'{ticker} - Trading Volume', fontsize=16, fontweight='bold')
-        ax.set_xlabel('Date', fontsize=12)
-        ax.set_ylabel('Volume', fontsize=12)
+        # Plot volume bars with sleek semi-transparent emerald color
+        ax.bar(df.index, df['Volume'], color='#10b981', alpha=0.7, width=0.8)
+        
+        # Titles and labels
+        ax.set_title(f'{ticker} - Trading Volume', fontsize=14, fontweight='bold', color='#f3f4f6', pad=15)
+        ax.set_xlabel('Date', fontsize=10, color='#9ca3af')
+        ax.set_ylabel('Volume', fontsize=10, color='#9ca3af')
+        
+        # Customize spines (borders)
+        for spine in ax.spines.values():
+            spine.set_color('#1f2937')
+            spine.set_linewidth(1)
+            
+        # Customize grid
+        ax.grid(True, color='#1f2937', linestyle='-', linewidth=0.5, alpha=0.7)
+        
+        # Customize ticks
+        ax.tick_params(colors='#9ca3af', labelsize=9)
+        plt.xticks(rotation=30)
         
         # Format y-axis with K/M/B
+        from utils.helpers import format_large_number
         ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format_large_number(x)))
         
-        plt.xticks(rotation=45)
         plt.tight_layout()
         
         # Save chart

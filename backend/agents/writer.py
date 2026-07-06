@@ -24,8 +24,9 @@ class WriterAgent:
             raise ValueError("GEMINI_API_KEY is required")
         
         # Initialize Gemini
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash-lite",
+            model=model_name,
             google_api_key=self.api_key,
             temperature=0.4,  # Balanced creativity for writing
             convert_system_message_to_human=True
@@ -160,12 +161,12 @@ class WriterAgent:
                 'time_horizon': 'Medium',
                 'summary': f'Analysis complete for {ticker}'
             }
-    
+
     def _write_full_report(self, ticker: str, research_data: Dict, analysis_data: Dict, recommendation: Dict) -> Dict[str, Any]:
-        """Write complete investment report"""
+        """Write complete investment report as JSON and assemble full text"""
         try:
             messages = [
-                SystemMessage(content=WRITER_SYSTEM),
+                SystemMessage(content="You are a senior financial writer who outputs structured financial JSON data. Output raw JSON ONLY."),
                 HumanMessage(content=WRITER_PROMPT.format(
                     ticker=ticker,
                     research_data=json.dumps(research_data, indent=2, default=str),
@@ -174,13 +175,79 @@ class WriterAgent:
             ]
             
             response = self.llm.invoke(messages)
+            text = response.content.strip()
             
-            # Parse the report
-            report = self._parse_report(response.content, recommendation)
-            logger.info(f"✅ Report parsed into {len(report['key_findings'])} findings and {len(report['risks'])} risks")
-            
-            return report
-            
+            data = None
+            try:
+                # Find and load JSON block
+                start = text.find('{')
+                end = text.rfind('}') + 1
+                if start >= 0 and end > start:
+                    json_str = text[start:end]
+                    data = json.loads(json_str)
+                    logger.info("✅ Report JSON parsed successfully")
+            except Exception as je:
+                logger.warning(f"⚠️ Report JSON parsing failed: {str(je)}. Falling back to text parser.")
+                
+            if data and isinstance(data, dict):
+                # Build the markdown full text dynamically for PDF/Download representation
+                full_text = f"""## Investment Report: {ticker}
+**Date:** {datetime.now().strftime("%B %d, %Y")}
+
+### 1. EXECUTIVE SUMMARY
+{data.get('executive_summary', '')}
+
+### 2. KEY FINDINGS
+"""
+                for item in data.get('key_findings', []):
+                    full_text += f"- {item}\n"
+                    
+                full_text += f"""
+### 3. INVESTMENT THESIS
+{data.get('investment_thesis', '')}
+
+**Bull Case:**
+"""
+                for item in data.get('bull_case', []):
+                    full_text += f"- {item}\n"
+                    
+                full_text += "\n**Bear Case:**\n"
+                for item in data.get('bear_case', []):
+                    full_text += f"- {item}\n"
+                    
+                full_text += f"""
+### 4. FINAL RECOMMENDATION
+*   **Recommendation:** {recommendation.get('rating', 'HOLD')}
+*   **Confidence Level:** {recommendation.get('confidence', 'Medium')}
+*   **Target Price Range:** {recommendation.get('target_price') if recommendation.get('target_price') else 'N/A'}
+*   **Time Horizon:** {recommendation.get('time_horizon', 'Medium')}
+
+**Key Catalysts to Watch:**
+"""
+                for item in data.get('catalysts', []):
+                    full_text += f"- {item}\n"
+                    
+                full_text += "\n### 5. RISK FACTORS\n"
+                for item in data.get('risk_factors', []):
+                    full_text += f"- {item}\n"
+                    
+                # Compile parsed dict
+                report = {
+                    'summary': full_text[:400] + '...',
+                    'executive_summary': data.get('executive_summary', ''),
+                    'key_findings': data.get('key_findings', []),
+                    'thesis': data.get('investment_thesis', ''),
+                    'bull_case': data.get('bull_case', []),
+                    'bear_case': data.get('bear_case', []),
+                    'risks': data.get('risk_factors', []),
+                    'catalysts': data.get('catalysts', []),
+                    'full_text': full_text
+                }
+                return report
+            else:
+                # Fallback to parsing raw text if LLM failed to output JSON
+                return self._parse_report_fallback(text, recommendation)
+                
         except Exception as e:
             logger.error(f"❌ Error writing full report: {str(e)}")
             return {
@@ -188,13 +255,13 @@ class WriterAgent:
                 'executive_summary': f'Analysis of {ticker} based on latest data',
                 'key_findings': ['Analysis completed'],
                 'thesis': 'See summary',
-                'bull_case': '',
-                'bear_case': '',
+                'bull_case': ['Potential upside based on market cap'],
+                'bear_case': ['Potential downside risks'],
                 'risks': ['Market volatility', 'Company-specific risks'],
                 'catalysts': ['Earnings reports', 'Market developments'],
                 'full_text': response.content if 'response' in locals() else ''
             }
-    
+
     def _parse_recommendation_fallback(self, text: str) -> Dict[str, Any]:
         """Fallback parsing for recommendation when JSON fails"""
         text_upper = text.upper()
@@ -233,16 +300,16 @@ class WriterAgent:
             'time_horizon': 'Medium',
             'summary': text[:200] + '...' if len(text) > 200 else text
         }
-    
-    def _parse_report(self, text: str, recommendation: Dict) -> Dict[str, Any]:
-        """Parse the full report into sections"""
+
+    def _parse_report_fallback(self, text: str, recommendation: Dict) -> Dict[str, Any]:
+        """Fallback markdown parser if JSON output failed"""
         report = {
             'summary': '',
             'executive_summary': '',
             'key_findings': [],
             'thesis': '',
-            'bull_case': '',
-            'bear_case': '',
+            'bull_case': [],
+            'bear_case': [],
             'risks': [],
             'catalysts': [],
             'full_text': text
@@ -250,15 +317,15 @@ class WriterAgent:
         
         lines = text.split('\n')
         current_section = 'summary'
+        import re
         
         for line in lines:
             line_lower = line.lower()
             line_stripped = line.strip()
             
-            # Skip empty lines
             if not line_stripped:
                 continue
-            
+                
             # Detect sections
             if 'executive summary' in line_lower:
                 current_section = 'executive'
@@ -272,54 +339,58 @@ class WriterAgent:
             elif 'bull case' in line_lower or 'positive' in line_lower:
                 current_section = 'bull'
                 continue
-            elif 'bear case' in line_lower or 'risk' in line_lower:
-                current_section = 'bear'
+            elif 'bear case' in line_lower or 'risk factor' in line_lower:
+                if 'risk factor' in line_lower:
+                    current_section = 'risks'
+                else:
+                    current_section = 'bear'
                 continue
-            elif 'risk factor' in line_lower:
+            elif 'risk' in line_lower:
                 current_section = 'risks'
                 continue
             elif 'catalyst' in line_lower:
                 current_section = 'catalysts'
                 continue
-            
-            # Add content to current section
+                
+            # Add content
             if current_section == 'executive':
                 report['executive_summary'] += line_stripped + ' '
             elif current_section == 'thesis':
                 report['thesis'] += line_stripped + ' '
+            elif current_section == 'bull' and line_stripped and line_stripped[0] in ['-', '•', '*', '‣', '▪', '→']:
+                clean_item = re.sub(r'^[-\u2022*‣▪→]\s*', '', line_stripped).strip()
+                if clean_item:
+                    report['bull_case'].append(clean_item)
             elif current_section == 'bull':
-                report['bull_case'] += line_stripped + ' '
+                report['bull_case'].append(line_stripped)
+            elif current_section == 'bear' and line_stripped and line_stripped[0] in ['-', '•', '*', '‣', '▪', '→']:
+                clean_item = re.sub(r'^[-\u2022*‣▪→]\s*', '', line_stripped).strip()
+                if clean_item:
+                    report['bear_case'].append(clean_item)
             elif current_section == 'bear':
-                report['bear_case'] += line_stripped + ' '
+                report['bear_case'].append(line_stripped)
             elif current_section == 'findings' and line_stripped and line_stripped[0] in ['-', '•', '*', '‣', '▪', '→']:
-                # Clean bullet points
-                clean_finding = line_stripped.lstrip('-•*‣▪→ ').strip()
+                clean_finding = re.sub(r'^[-\u2022*‣▪→]\s*', '', line_stripped).strip()
                 if clean_finding:
                     report['key_findings'].append(clean_finding)
             elif current_section == 'findings' and line_stripped and line_stripped[0].isdigit() and line_stripped[1:2] in ['.', ')']:
-                # Handle numbered lists
                 clean_finding = line_stripped[2:].strip() if len(line_stripped) > 2 else line_stripped
                 if clean_finding:
                     report['key_findings'].append(clean_finding)
             elif current_section == 'risks' and line_stripped and line_stripped[0] in ['-', '•', '*', '‣', '▪', '→']:
-                clean_risk = line_stripped.lstrip('-•*‣▪→ ').strip()
+                clean_risk = re.sub(r'^[-\u2022*‣▪→]\s*', '', line_stripped).strip()
                 if clean_risk:
                     report['risks'].append(clean_risk)
             elif current_section == 'catalysts' and line_stripped and line_stripped[0] in ['-', '•', '*', '‣', '▪', '→']:
-                clean_catalyst = line_stripped.lstrip('-•*‣▪→ ').strip()
+                clean_catalyst = re.sub(r'^[-\u2022*‣▪→]\s*', '', line_stripped).strip()
                 if clean_catalyst:
                     report['catalysts'].append(clean_catalyst)
             elif current_section == 'summary':
                 report['summary'] += line_stripped + ' '
-        
+                
         # Clean up whitespace
-        for key in ['summary', 'executive_summary', 'thesis', 'bull_case', 'bear_case']:
+        for key in ['summary', 'executive_summary', 'thesis']:
             report[key] = report[key].strip()
-        
-        # If no findings found, add a default
-        if not report['key_findings'] and report['summary']:
-            # Try to extract first few sentences as findings
-            sentences = report['summary'].split('. ')
-            report['key_findings'] = [s.strip() + '.' for s in sentences[:3] if len(s) > 20]
-        
+            
         return report
+    

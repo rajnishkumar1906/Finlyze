@@ -33,11 +33,26 @@ def search_news(ticker: str, company_name: str = "", max_results: int = 10) -> L
             for query in queries:
                 try:
                     # Search for news from last 7 days
-                    results = ddgs.news(
-                        query,
-                        max_results=max_results // len(queries),
-                        timelimit="7d"  # Last 7 days
-                    )
+                    results = None
+                    try:
+                        results = list(ddgs.news(
+                            query,
+                            max_results=max_results // len(queries),
+                            timelimit="7d"  # Last 7 days
+                        ))
+                    except Exception as e:
+                        logger.warning(f"DuckDuckGo news failed for '{query}': {str(e)}")
+                    
+                    # Fallback to standard web text search if news is empty
+                    if not results:
+                        try:
+                            results = list(ddgs.text(
+                                query,
+                                max_results=max_results // len(queries)
+                            ))
+                        except Exception as e:
+                            logger.error(f"DuckDuckGo text search failed for '{query}': {str(e)}")
+                            results = []
                     
                     for result in results:
                         # Deduplicate by title
@@ -172,11 +187,25 @@ def search_market_news(query: str = "stock market", max_results: int = 5) -> Lis
     """
     try:
         with DDGS() as ddgs:
-            results = ddgs.news(
-                query,
-                max_results=max_results,
-                timelimit="2d"
-            )
+            results = None
+            try:
+                results = list(ddgs.news(
+                    query,
+                    max_results=max_results,
+                    timelimit="2d"
+                ))
+            except Exception:
+                pass
+                
+            # Fallback to text search if news is empty
+            if not results:
+                try:
+                    results = list(ddgs.text(
+                        query,
+                        max_results=max_results
+                    ))
+                except Exception:
+                    results = []
             
             news = []
             for result in results:

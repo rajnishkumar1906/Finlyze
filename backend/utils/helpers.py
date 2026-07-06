@@ -15,8 +15,25 @@ def setup_directories():
         print("✅ Output directory ready")
 
 def clean_ticker(ticker: str) -> str:
-    """Clean and validate ticker symbol"""
-    return ticker.strip().upper()
+    """Clean and validate ticker symbol, stripping exchange prefixes like NASDAQ- META or NASDAQ:META"""
+    t = ticker.strip().upper()
+    
+    # Common exchange identifiers to strip
+    exchanges = ["NASDAQ", "NYSE", "AMEX", "NSE", "BSE", "LSE", "TSX", "ASX"]
+    
+    # Check if there is a separator like '-', ':', '/', or space ' '
+    for sep in [':', '-', '/', ' ']:
+        if sep in t:
+            parts = [p.strip() for p in t.split(sep) if p.strip()]
+            if len(parts) >= 2:
+                # If first part is a known exchange, return the second part (e.g. NASDAQ-META -> META)
+                if parts[0] in exchanges:
+                    return parts[1]
+                # If the second part is a known exchange, return the first part (e.g. META NYSE -> META)
+                if parts[1] in exchanges:
+                    return parts[0]
+                
+    return t
 
 def format_currency(value: float) -> str:
     """Format number as currency"""
