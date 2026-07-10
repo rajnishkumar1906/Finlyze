@@ -137,14 +137,14 @@ def generate_pdf_report(
         stats_data = [
             ['Current Price', format_currency(company_data.get('current_price'))],
             ['Market Cap', format_currency(company_data.get('market_cap'))],
-            ['P/E Ratio', f"{company_data.get('pe_ratio', 'N/A'):.2f}" if company_data.get('pe_ratio') else 'N/A'],
-            ['EPS', f"${company_data.get('eps', 0):.2f}" if company_data.get('eps') else 'N/A'],
+            ['P/E Ratio', f"{company_data.get('pe_ratio'):.2f}" if isinstance(company_data.get('pe_ratio'), (int, float)) else 'N/A'],
+            ['EPS', f"${company_data.get('eps'):.2f}" if isinstance(company_data.get('eps'), (int, float)) else 'N/A'],
             ['52W High', format_currency(company_data.get('high_52w'))],
             ['52W Low', format_currency(company_data.get('low_52w'))],
             ['Volume', format_large_number(company_data.get('volume', 0))],
             ['Avg Volume', format_large_number(company_data.get('avg_volume', 0))],
             ['Dividend Yield', format_percentage(company_data.get('dividend_yield'))],
-            ['Beta', f"{company_data.get('beta', 'N/A'):.2f}" if company_data.get('beta') else 'N/A']
+            ['Beta', f"{company_data.get('beta'):.2f}" if isinstance(company_data.get('beta'), (int, float)) else 'N/A']
         ]
         
         for key, value in stats_data:

@@ -242,9 +242,8 @@ def start_analysis():
         "company_name": company_name
     })
 
-@app.route('/api/status/<task_id>')
-def get_status(task_id):
-    """API endpoint for fetching task progress"""
+def ensure_task_in_memory(task_id):
+    """Helper to ensure a task exists in memory, loading from database fallback if needed"""
     task = tasks.get(task_id)
     if not task:
         from utils.db_manager import get_saved_analysis_results
@@ -266,8 +265,14 @@ def get_status(task_id):
                 "results": saved_results
             }
             tasks[task_id] = task
-        else:
-            return jsonify({"status": "not_found", "error": "Task not found"}), 404
+    return task
+
+@app.route('/api/status/<task_id>')
+def get_status(task_id):
+    """API endpoint for fetching task progress"""
+    task = ensure_task_in_memory(task_id)
+    if not task:
+        return jsonify({"status": "not_found", "error": "Task not found"}), 404
             
     return jsonify({
         "status": task["status"],
@@ -285,29 +290,9 @@ def get_status(task_id):
 @app.route('/api/results/<task_id>')
 def results_page(task_id):
     """Display final analysis results once completed"""
-    task = tasks.get(task_id)
+    task = ensure_task_in_memory(task_id)
     if not task or task["status"] != "completed":
-        from utils.db_manager import get_saved_analysis_results
-        saved_results = get_saved_analysis_results(task_id)
-        if saved_results:
-            ticker = saved_results.get('analysis_data', {}).get('ticker') or saved_results.get('research_data', {}).get('ticker', 'UNKNOWN')
-            company_name = saved_results.get('analysis_data', {}).get('company_name') or 'Company'
-            task = {
-                "status": "completed",
-                "ticker": ticker,
-                "company_name": company_name,
-                "current_step": 3,
-                "agent_status": {"researcher": "completed", "analyst": "completed", "writer": "completed"},
-                "messages": ["[System] Loaded historical analysis from database."],
-                "error": None,
-                "research_data": saved_results.get('research_data'),
-                "analysis_data": saved_results.get('analysis_data'),
-                "writer_data": saved_results.get('writer_data'),
-                "results": saved_results
-            }
-            tasks[task_id] = task
-        else:
-            return jsonify({"error": "Analysis not found or in-progress"}), 404
+        return jsonify({"error": "Analysis not found or in-progress"}), 404
         
     results = task["results"]
     research_data = results["research_data"]
@@ -400,7 +385,7 @@ def serve_output(filename):
 @app.route('/api/download/csv/<task_id>')
 def download_csv(task_id):
     """Generate and return CSV file containing the financial data"""
-    task = tasks.get(task_id)
+    task = ensure_task_in_memory(task_id)
     if not task or task["status"] != "completed":
         return "Task not found", 404
         
@@ -448,7 +433,7 @@ def download_csv(task_id):
 @app.route('/api/download/txt/<task_id>')
 def download_txt(task_id):
     """Download plain text version of the generated report"""
-    task = tasks.get(task_id)
+    task = ensure_task_in_memory(task_id)
     if not task or task["status"] != "completed":
         return "Task not found", 404
         
