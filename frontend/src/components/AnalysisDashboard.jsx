@@ -8,6 +8,31 @@ const API_BASE = import.meta.env.VITE_API_BASE || (
     : window.location.origin
 );
 
+// Safe wrappers to guarantee input is a string to prevent marked() uncaught type errors
+const safeMarkedParse = (val) => {
+  if (!val) return "";
+  if (typeof val !== 'string') {
+    try {
+      return marked.parse(JSON.stringify(val));
+    } catch {
+      return String(val);
+    }
+  }
+  return marked.parse(val);
+};
+
+const safeMarkedParseInline = (val) => {
+  if (!val) return "";
+  if (typeof val !== 'string') {
+    try {
+      return marked.parseInline(JSON.stringify(val));
+    } catch {
+      return String(val);
+    }
+  }
+  return marked.parseInline(val);
+};
+
 export default function AnalysisDashboard({ initialTaskId, ticker, companyName, onReset }) {
   const [taskId, setTaskId] = useState(initialTaskId);
   const [taskData, setTaskData] = useState({
@@ -579,11 +604,11 @@ export default function AnalysisDashboard({ initialTaskId, ticker, companyName, 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white/[0.01] border border-white/5 rounded-xl p-5 text-left">
                       <h4 className="text-xs font-extrabold text-blue-400 uppercase tracking-wider mb-2 font-display">Executive Brief</h4>
-                      <div className="text-xs text-gray-300 leading-relaxed font-sans prose prose-sm prose-invert" dangerouslySetInnerHTML={{ __html: marked.parse(taskData.writer_data.executive_summary || taskData.writer_data.report_summary || "") }} />
+                      <div className="text-xs text-gray-300 leading-relaxed font-sans prose prose-sm prose-invert" dangerouslySetInnerHTML={{ __html: safeMarkedParse(taskData.writer_data.executive_summary || taskData.writer_data.report_summary || "") }} />
                     </div>
                     <div className="bg-white/[0.01] border border-white/5 rounded-xl p-5 text-left">
                       <h4 className="text-xs font-extrabold text-indigo-400 uppercase tracking-wider mb-2 font-display">Investment Core Thesis</h4>
-                      <div className="text-xs text-gray-300 leading-relaxed font-sans prose prose-sm prose-invert" dangerouslySetInnerHTML={{ __html: marked.parse(taskData.writer_data.investment_thesis || "") }} />
+                      <div className="text-xs text-gray-300 leading-relaxed font-sans prose prose-sm prose-invert" dangerouslySetInnerHTML={{ __html: safeMarkedParse(taskData.writer_data.investment_thesis || "") }} />
                     </div>
                   </div>
                   
@@ -597,7 +622,7 @@ export default function AnalysisDashboard({ initialTaskId, ticker, companyName, 
                         <li 
                           key={i} 
                           className="text-xs text-gray-300 leading-relaxed relative pl-4 before:content-['•'] before:absolute before:left-0 before:text-emerald-500"
-                          dangerouslySetInnerHTML={{ __html: marked.parseInline(f) }}
+                          dangerouslySetInnerHTML={{ __html: safeMarkedParseInline(f) }}
                         />
                       )) || <li className="text-gray-500 text-xs italic">No findings available.</li>}
                     </ul>
@@ -618,12 +643,12 @@ export default function AnalysisDashboard({ initialTaskId, ticker, companyName, 
                           <li 
                             key={i} 
                             className="text-xs text-gray-300 leading-relaxed relative pl-4 before:content-['•'] before:absolute before:left-0 before:text-emerald-500"
-                            dangerouslySetInnerHTML={{ __html: marked.parseInline(f) }}
+                            dangerouslySetInnerHTML={{ __html: safeMarkedParseInline(f) }}
                           />
                         ))}
                       </ul>
                     ) : (
-                      <div className="text-xs text-gray-300 leading-relaxed font-sans prose prose-sm prose-invert" dangerouslySetInnerHTML={{ __html: marked.parse(taskData.writer_data.bull_case || "") }} />
+                      <div className="text-xs text-gray-300 leading-relaxed font-sans prose prose-sm prose-invert" dangerouslySetInnerHTML={{ __html: safeMarkedParse(taskData.writer_data.bull_case || "") }} />
                     )}
                   </div>
                   <div className="bg-rose-950/5 border border-rose-500/15 rounded-xl p-5 text-left hover:border-rose-500/30 transition-all duration-300">
@@ -636,12 +661,12 @@ export default function AnalysisDashboard({ initialTaskId, ticker, companyName, 
                           <li 
                             key={i} 
                             className="text-xs text-gray-300 leading-relaxed relative pl-4 before:content-['•'] before:absolute before:left-0 before:text-red-500"
-                            dangerouslySetInnerHTML={{ __html: marked.parseInline(f) }}
+                            dangerouslySetInnerHTML={{ __html: safeMarkedParseInline(f) }}
                           />
                         ))}
                       </ul>
                     ) : (
-                      <div className="text-xs text-gray-300 leading-relaxed font-sans prose prose-sm prose-invert" dangerouslySetInnerHTML={{ __html: marked.parse(taskData.writer_data.bear_case || "") }} />
+                      <div className="text-xs text-gray-300 leading-relaxed font-sans prose prose-sm prose-invert" dangerouslySetInnerHTML={{ __html: safeMarkedParse(taskData.writer_data.bear_case || "") }} />
                     )}
                   </div>
                 </div>
@@ -659,10 +684,10 @@ export default function AnalysisDashboard({ initialTaskId, ticker, companyName, 
                         <li 
                           key={i} 
                           className="text-xs text-gray-300 leading-relaxed relative pl-4 before:content-['•'] before:absolute before:left-0 before:text-indigo-500"
-                          dangerouslySetInnerHTML={{ __html: marked.parseInline(f) }}
+                          dangerouslySetInnerHTML={{ __html: safeMarkedParseInline(f) }}
                         />
                       )) || (
-                        <div className="text-xs text-gray-400 leading-relaxed font-sans" dangerouslySetInnerHTML={{ __html: marked.parse(taskData.writer_data.catalysts || "No catalysts specified.") }} />
+                        <div className="text-xs text-gray-400 leading-relaxed font-sans" dangerouslySetInnerHTML={{ __html: safeMarkedParse(taskData.writer_data.catalysts || "No catalysts specified.") }} />
                       )}
                     </ul>
                   </div>
@@ -675,7 +700,7 @@ export default function AnalysisDashboard({ initialTaskId, ticker, companyName, 
                         <li 
                           key={i} 
                           className="text-xs text-gray-300 leading-relaxed relative pl-4 before:content-['•'] before:absolute before:left-0 before:text-red-500"
-                          dangerouslySetInnerHTML={{ __html: marked.parseInline(f) }}
+                          dangerouslySetInnerHTML={{ __html: safeMarkedParseInline(f) }}
                         />
                       )) || <li className="text-gray-500 text-xs italic">No risk factors available.</li>}
                     </ul>
@@ -686,7 +711,7 @@ export default function AnalysisDashboard({ initialTaskId, ticker, companyName, 
               {/* PANEL: RAW DOSSIER */}
               {reportTab === 'full' && (
                 <div className="bg-slate-950/40 border border-white/5 rounded-xl p-6 overflow-y-auto max-h-[450px] text-left animate-fade-in font-sans prose prose-invert max-w-none prose-sm prose-headings:font-display prose-headings:text-white prose-a:text-blue-400">
-                  <div dangerouslySetInnerHTML={{ __html: marked.parse(taskData.writer_data.full_report || "") }} />
+                  <div dangerouslySetInnerHTML={{ __html: safeMarkedParse(taskData.writer_data.full_report || "") }} />
                 </div>
               )}
             </div>

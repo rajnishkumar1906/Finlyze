@@ -600,4 +600,4 @@ def serve_frontend(path):
             return send_from_directory(frontend_folder, path)
         return send_from_directory(frontend_folder, 'index.html')
         
-    return "Finlyze API Backend is running. Production frontend build not found.", 200
+    return "Finlyze API Backend is running.", 200
