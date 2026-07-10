@@ -51,6 +51,56 @@ setup_directories()
 from utils.db_manager import init_db
 init_db()
 
+def cleanup_old_data_loop():
+    """Background loop to delete database records and files older than 24 hours"""
+    import time
+    from datetime import datetime, timedelta
+    from utils.db_manager import get_db_connection
+    
+    # Give the server a few seconds to start up fully
+    time.sleep(10)
+    
+    while True:
+        try:
+            print("🧹 Starting 24-hour cleanup cycle...")
+            cutoff_time = datetime.now() - timedelta(hours=24)
+            cutoff_timestamp = cutoff_time.strftime("%Y-%m-%d %H:%M:%S")
+            
+            # 1. Clean database records older than 24 hours
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM analysis_history WHERE generated_at < ?", (cutoff_timestamp,))
+            deleted_rows = cursor.rowcount
+            conn.commit()
+            conn.close()
+            if deleted_rows > 0:
+                print(f"🧹 Cleaned {deleted_rows} old records from analysis history database.")
+                
+            # 2. Clean files in output/ directory older than 24 hours
+            output_dir = "output"
+            if os.path.exists(output_dir):
+                now = time.time()
+                for root, dirs, files in os.walk(output_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        if os.path.isfile(file_path):
+                            file_time = os.path.getmtime(file_path)
+                            # 24 hours = 86400 seconds
+                            if now - file_time > 86400:
+                                try:
+                                    os.remove(file_path)
+                                    print(f"🧹 Deleted expired file: {file_path}")
+                                except Exception as fe:
+                                    pass
+        except Exception as e:
+            pass
+            
+        # Sleep for 1 hour (3600 seconds) before the next cleanup cycle
+        time.sleep(3600)
+
+cleanup_thread = Thread(target=cleanup_old_data_loop, daemon=True)
+cleanup_thread.start()
+
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 api_key_configured = bool(GEMINI_API_KEY)
 
