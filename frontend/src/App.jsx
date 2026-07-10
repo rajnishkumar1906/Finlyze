@@ -4,78 +4,36 @@ import SearchPage from './components/SearchPage';
 import AnalysisDashboard from './components/AnalysisDashboard';
 import ComparePage from './components/ComparePage';
 
-const API_BASE = import.meta.env.VITE_API_BASE || (
-  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:5000'
-    : window.location.origin
-);
-
 export default function App() {
   const [activePage, setActivePage] = useState('search'); // 'search' | 'dashboard' | 'compare'
   const [taskId, setTaskId] = useState('');
   const [ticker, setTicker] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [error, setError] = useState(null);
   const [compareTickers, setCompareTickers] = useState({ ticker1: '', ticker2: '' });
 
   const handleStartAnalysis = (searchTicker, searchCompanyName) => {
     setTicker(searchTicker);
     setCompanyName(searchCompanyName);
+    setTaskId('');
     setActivePage('dashboard');
-    setError(null);
-
-    // Call backend API to initiate workflow
-    fetch(`${API_BASE}/api/analyze`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ticker: searchTicker,
-        company_name: searchCompanyName
-      })
-    })
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to initialize analysis pipeline on backend");
-        return res.json();
-      })
-      .then(data => {
-        if (data.task_id) {
-          setTaskId(data.task_id);
-          if (data.company_name) {
-            setCompanyName(data.company_name);
-          }
-        } else {
-          throw new Error("No task ID received from backend");
-        }
-      })
-      .catch(err => {
-        console.error("Pipeline start error:", err);
-        setError(err.message);
-        setActivePage('search');
-        alert(`Failed to start analysis: ${err.message}`);
-      });
   };
 
   const handleLoadHistory = (historyTaskId, historyTicker, historyCompanyName) => {
     setTaskId(historyTaskId);
     setTicker(historyTicker);
     setCompanyName(historyCompanyName || '');
-    setError(null);
     setActivePage('dashboard');
   };
 
   const handleStartComparison = (t1, t2) => {
     setCompareTickers({ ticker1: t1, ticker2: t2 });
     setActivePage('compare');
-    setError(null);
   };
 
   const handleReset = () => {
     setTaskId('');
     setTicker('');
     setCompanyName('');
-    setError(null);
     setCompareTickers({ ticker1: '', ticker2: '' });
     setActivePage('search');
   };
@@ -104,8 +62,9 @@ export default function App() {
           />
         ) : activePage === 'dashboard' ? (
           <AnalysisDashboard
-            taskId={taskId}
+            initialTaskId={taskId}
             ticker={ticker}
+            companyName={companyName}
             onReset={handleReset}
           />
         ) : (

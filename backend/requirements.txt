@@ -14,3 +14,4 @@ numpy
 requests
 python-dotenv
 langchain-google-genai
+gunicorn

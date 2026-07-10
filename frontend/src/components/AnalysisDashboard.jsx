@@ -8,11 +8,12 @@ const API_BASE = import.meta.env.VITE_API_BASE || (
     : window.location.origin
 );
 
-export default function AnalysisDashboard({ taskId, ticker, onReset }) {
+export default function AnalysisDashboard({ initialTaskId, ticker, companyName, onReset }) {
+  const [taskId, setTaskId] = useState(initialTaskId);
   const [taskData, setTaskData] = useState({
     status: "processing",
     ticker: ticker,
-    company_name: "",
+    company_name: companyName || "",
     current_step: 0,
     agent_status: { researcher: "pending", analyst: "pending", writer: "pending" },
     messages: ["[System] Initializing analysis pipeline..."],
@@ -66,7 +67,41 @@ export default function AnalysisDashboard({ taskId, ticker, onReset }) {
     }
   };
 
+  // Trigger new analysis if taskId is not set on mount
   useEffect(() => {
+    if (!taskId && ticker) {
+      fetch(`${API_BASE}/api/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker, company_name: companyName })
+      })
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to start analysis");
+          return res.json();
+        })
+        .then(data => {
+          if (data.task_id) {
+            setTaskId(data.task_id);
+          } else {
+            throw new Error("No task ID received");
+          }
+        })
+        .catch(err => {
+          console.error("Analysis trigger failed:", err);
+          setTaskData(prev => ({
+            ...prev,
+            status: "failed",
+            error: err.message,
+            messages: [...prev.messages, `[System] Trigger error: ${err.message}`]
+          }));
+        });
+    }
+  }, [taskId, ticker, companyName]);
+
+  // Poll for task status
+  useEffect(() => {
+    if (!taskId) return;
+    
     const pollInterval = setInterval(() => {
       fetch(`${API_BASE}/api/status/${taskId}`)
         .then(res => {
