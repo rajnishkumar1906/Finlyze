@@ -2,7 +2,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE || (
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:5000'
+    : window.location.origin
+);
 
 export default function AnalysisDashboard({ taskId, ticker, onReset }) {
   const [taskData, setTaskData] = useState({
@@ -23,6 +27,44 @@ export default function AnalysisDashboard({ taskId, ticker, onReset }) {
   const [reportTab, setReportTab] = useState('thesis');
   const [zoomChartUrl, setZoomChartUrl] = useState(null);
   const logContainerRef = useRef(null);
+
+  const [isSaved, setIsSaved] = useState(false);
+
+  // Check watchlist status on ticker load
+  useEffect(() => {
+    if (taskData.ticker) {
+      fetch(`${API_BASE}/api/watchlist/check/${encodeURIComponent(taskData.ticker)}`)
+        .then(res => res.json())
+        .then(data => setIsSaved(data.watchlisted))
+        .catch(err => console.error("Error checking watchlist:", err));
+    }
+  }, [taskData.ticker]);
+
+  const toggleWatchlist = () => {
+    if (!taskData.ticker) return;
+    if (isSaved) {
+      fetch(`${API_BASE}/api/watchlist/${encodeURIComponent(taskData.ticker)}`, { method: 'DELETE' })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) setIsSaved(false);
+        })
+        .catch(err => console.error("Error removing from watchlist:", err));
+    } else {
+      fetch(`${API_BASE}/api/watchlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticker: taskData.ticker,
+          company_name: taskData.company_name
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) setIsSaved(true);
+        })
+        .catch(err => console.error("Error adding to watchlist:", err));
+    }
+  };
 
   useEffect(() => {
     const pollInterval = setInterval(() => {
@@ -121,7 +163,19 @@ export default function AnalysisDashboard({ taskId, ticker, onReset }) {
               ></div>
             </div>
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-3">
+            <button
+              onClick={toggleWatchlist}
+              className={`flex items-center justify-center border font-bold py-2.5 px-4 rounded-xl text-sm transition-all cursor-pointer ${
+                isSaved
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+                  : 'bg-white/4 border-white/5 text-gray-400 hover:text-white hover:bg-white/8'
+              }`}
+              title={isSaved ? "Remove from Watchlist" : "Add to Watchlist"}
+            >
+              <span className="text-base mr-1.5 leading-none">{isSaved ? '★' : '☆'}</span>
+              Watchlist
+            </button>
             <button
               onClick={onReset}
               className="bg-white/4 border border-white/5 hover:bg-white/8 hover:border-gray-400 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition-all cursor-pointer"

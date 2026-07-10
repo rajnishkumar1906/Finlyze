@@ -1,4 +1,12 @@
 # backend/app.py
+import sys
+# Reconfigure standard output encoding to UTF-8 to prevent unicode print crashes on Windows
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+except AttributeError:
+    pass
+
 from flask import Flask, request, jsonify, send_from_directory, Response
 from flask.json.provider import DefaultJSONProvider
 import os
@@ -13,7 +21,12 @@ import io
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__)
+# Initialize Flask app - dynamically detect production static assets path
+frontend_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend', 'dist')
+if os.path.exists(frontend_folder):
+    app = Flask(__name__, static_folder=os.path.join(frontend_folder, 'assets'), template_folder=frontend_folder)
+else:
+    app = Flask(__name__)
 
 # Enable global CORS headers
 @app.after_request
@@ -33,6 +46,10 @@ def handle_options():
 # Ensure output directories are created
 from utils.helpers import setup_directories, clean_ticker
 setup_directories()
+
+# Initialize SQLite database
+from utils.db_manager import init_db
+init_db()
 
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 api_key_configured = bool(GEMINI_API_KEY)
@@ -166,6 +183,22 @@ def run_workflow_async(task_id, ticker, company_name):
         }
         tasks[task_id]["status"] = "completed"
         
+        # Save to database for permanent history
+        try:
+            from utils.db_manager import save_analysis
+            target_pr = recommendation.get('target_price') or 'N/A'
+            save_analysis(
+                task_id=task_id,
+                ticker=ticker,
+                company_name=resolved_name,
+                rating=rating,
+                target_price=target_pr,
+                results_dict=tasks[task_id]["results"]
+            )
+            tasks[task_id]["messages"].append("[System] Analysis successfully saved to local SQLite history.")
+        except Exception as dbe:
+            logger.error(f"Failed to persist analysis to SQLite: {str(dbe)}")
+        
     except Exception as e:
         tasks[task_id]["status"] = "failed"
         tasks[task_id]["error"] = str(e)
@@ -214,7 +247,28 @@ def get_status(task_id):
     """API endpoint for fetching task progress"""
     task = tasks.get(task_id)
     if not task:
-        return jsonify({"status": "not_found", "error": "Task not found"}), 404
+        from utils.db_manager import get_saved_analysis_results
+        saved_results = get_saved_analysis_results(task_id)
+        if saved_results:
+            ticker = saved_results.get('analysis_data', {}).get('ticker') or saved_results.get('research_data', {}).get('ticker', 'UNKNOWN')
+            company_name = saved_results.get('analysis_data', {}).get('company_name') or 'Company'
+            task = {
+                "status": "completed",
+                "ticker": ticker,
+                "company_name": company_name,
+                "current_step": 3,
+                "agent_status": {"researcher": "completed", "analyst": "completed", "writer": "completed"},
+                "messages": ["[System] Loaded historical analysis from database."],
+                "error": None,
+                "research_data": saved_results.get('research_data'),
+                "analysis_data": saved_results.get('analysis_data'),
+                "writer_data": saved_results.get('writer_data'),
+                "results": saved_results
+            }
+            tasks[task_id] = task
+        else:
+            return jsonify({"status": "not_found", "error": "Task not found"}), 404
+            
     return jsonify({
         "status": task["status"],
         "ticker": task["ticker"],
@@ -233,7 +287,27 @@ def results_page(task_id):
     """Display final analysis results once completed"""
     task = tasks.get(task_id)
     if not task or task["status"] != "completed":
-        return jsonify({"error": "Analysis not found or in-progress"}), 404
+        from utils.db_manager import get_saved_analysis_results
+        saved_results = get_saved_analysis_results(task_id)
+        if saved_results:
+            ticker = saved_results.get('analysis_data', {}).get('ticker') or saved_results.get('research_data', {}).get('ticker', 'UNKNOWN')
+            company_name = saved_results.get('analysis_data', {}).get('company_name') or 'Company'
+            task = {
+                "status": "completed",
+                "ticker": ticker,
+                "company_name": company_name,
+                "current_step": 3,
+                "agent_status": {"researcher": "completed", "analyst": "completed", "writer": "completed"},
+                "messages": ["[System] Loaded historical analysis from database."],
+                "error": None,
+                "research_data": saved_results.get('research_data'),
+                "analysis_data": saved_results.get('analysis_data'),
+                "writer_data": saved_results.get('writer_data'),
+                "results": saved_results
+            }
+            tasks[task_id] = task
+        else:
+            return jsonify({"error": "Analysis not found or in-progress"}), 404
         
     results = task["results"]
     research_data = results["research_data"]
@@ -397,6 +471,136 @@ Disclaimer: Generated by Finlyze AI. Not financial advice.
         mimetype="text/plain",
         headers={"Content-disposition": f"attachment; filename={task['ticker']}_report.txt"}
     )
+
+# Watchlist Endpoints
+@app.route('/api/watchlist', methods=['GET'])
+def get_user_watchlist():
+    from utils.db_manager import get_watchlist
+    return jsonify(get_watchlist())
+
+@app.route('/api/watchlist', methods=['POST'])
+def add_user_watchlist():
+    data = request.json or {}
+    ticker = data.get('ticker', '').strip().upper()
+    company_name = data.get('company_name', '').strip()
+    
+    if not ticker:
+        return jsonify({"error": "Ticker is required"}), 400
+        
+    cleaned_ticker = clean_ticker(ticker)
+    
+    if not company_name:
+        try:
+            import yfinance as yf
+            ticker_obj = yf.Ticker(cleaned_ticker)
+            company_name = ticker_obj.info.get('longName') or ticker_obj.info.get('shortName') or cleaned_ticker
+        except:
+            company_name = cleaned_ticker
+            
+    from utils.db_manager import add_to_watchlist
+    success = add_to_watchlist(cleaned_ticker, company_name)
+    if success:
+        return jsonify({"success": True, "ticker": cleaned_ticker, "company_name": company_name})
+    return jsonify({"error": "Failed to add to watchlist"}), 500
+
+@app.route('/api/watchlist/<ticker>', methods=['DELETE'])
+def delete_user_watchlist(ticker):
+    cleaned_ticker = clean_ticker(ticker)
+    from utils.db_manager import remove_from_watchlist
+    success = remove_from_watchlist(cleaned_ticker)
+    if success:
+        return jsonify({"success": True})
+    return jsonify({"error": "Failed to remove from watchlist"}), 500
+
+@app.route('/api/watchlist/check/<ticker>')
+def check_user_watchlist(ticker):
+    cleaned_ticker = clean_ticker(ticker)
+    from utils.db_manager import is_watchlisted
+    return jsonify({"watchlisted": is_watchlisted(cleaned_ticker)})
+
+# History Endpoints
+@app.route('/api/history')
+def get_user_history():
+    from utils.db_manager import get_analysis_history
+    return jsonify(get_analysis_history(limit=15))
+
+# Comparison Endpoint
+@app.route('/api/compare')
+def compare_stocks():
+    t1 = request.args.get('ticker1', '').strip().upper()
+    t2 = request.args.get('ticker2', '').strip().upper()
+    
+    if not t1 or not t2:
+        return jsonify({"error": "Both ticker1 and ticker2 are required parameters"}), 400
+        
+    t1_clean = clean_ticker(t1)
+    t2_clean = clean_ticker(t2)
+    
+    import yfinance as yf
+    
+    def get_stock_stats(ticker):
+        try:
+            ticker_obj = yf.Ticker(ticker)
+            info = ticker_obj.info
+            
+            current_price = info.get('currentPrice') or info.get('regularMarketPrice')
+            market_cap = info.get('marketCap')
+            pe_ratio = info.get('trailingPE') or info.get('forwardPE')
+            beta = info.get('beta')
+            high_52w = info.get('fiftyTwoWeekHigh')
+            low_52w = info.get('fiftyTwoWeekLow')
+            volume = info.get('volume')
+            avg_volume = info.get('averageVolume')
+            dividend_yield = info.get('dividendYield')
+            if dividend_yield:
+                dividend_yield = dividend_yield * 100
+                
+            return {
+                "success": True,
+                "ticker": ticker,
+                "company_name": info.get('longName') or info.get('shortName') or ticker,
+                "sector": info.get('sector', 'N/A'),
+                "industry": info.get('industry', 'N/A'),
+                "current_price": current_price,
+                "market_cap": market_cap,
+                "pe_ratio": pe_ratio,
+                "beta": beta,
+                "high_52w": high_52w,
+                "low_52w": low_52w,
+                "volume": volume,
+                "avg_volume": avg_volume,
+                "dividend_yield": dividend_yield,
+                "recommendation": info.get('recommendationKey', 'N/A').upper()
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "ticker": ticker,
+                "error": str(e)
+            }
+            
+    stats1 = get_stock_stats(t1_clean)
+    stats2 = get_stock_stats(t2_clean)
+    
+    return jsonify({
+        "ticker1": stats1,
+        "ticker2": stats2
+    })
+
+# Fallback catch-all route to serve the production React app index
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    if path.startswith('api/') or path.startswith('api'):
+        return jsonify({"error": "Not Found"}), 404
+        
+    if os.path.exists(frontend_folder):
+        file_path = os.path.join(frontend_folder, path)
+        if path and os.path.exists(file_path):
+            return send_from_directory(frontend_folder, path)
+        return send_from_directory(frontend_folder, 'index.html')
+        
+    return "Finlyze API Backend is running. Production frontend build not found.", 200
 
 if __name__ == '__main__':
     # Start the Flask REST API server
