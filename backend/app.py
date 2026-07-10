@@ -601,8 +601,3 @@ def serve_frontend(path):
         return send_from_directory(frontend_folder, 'index.html')
         
     return "Finlyze API Backend is running. Production frontend build not found.", 200
-
-if __name__ == '__main__':
-    # Start the Flask REST API server
-    port = int(os.environ.get("PORT", 5000))
-    app.run(debug=True, host='0.0.0.0', port=port)
