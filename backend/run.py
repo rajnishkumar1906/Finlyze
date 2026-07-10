@@ -13,5 +13,6 @@ from app import app
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    # Run server binding to all interfaces on the designated port
-    app.run(debug=True, host='0.0.0.0', port=port)
+    # Run in debug mode locally, but disable it in production for security
+    debug_mode = "PORT" not in os.environ
+    app.run(debug=debug_mode, host='0.0.0.0', port=port)
