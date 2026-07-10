@@ -8,11 +8,30 @@ const API_BASE = import.meta.env.VITE_API_BASE || (
     : window.location.origin
 );
 
-// Safe wrappers to guarantee input is a string to prevent marked() uncaught type errors
 const safeMarkedParse = (val) => {
   if (!val) return "";
   if (typeof val !== 'string') {
     try {
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        let formatted = "";
+        if (val.bull_case) {
+          formatted += "**Bull Case:**\n";
+          if (Array.isArray(val.bull_case)) {
+            formatted += val.bull_case.map(item => `- ${item}`).join('\n') + '\n\n';
+          } else {
+            formatted += `${val.bull_case}\n\n`;
+          }
+        }
+        if (val.bear_case) {
+          formatted += "**Bear Case:**\n";
+          if (Array.isArray(val.bear_case)) {
+            formatted += val.bear_case.map(item => `- ${item}`).join('\n') + '\n\n';
+          } else {
+            formatted += `${val.bear_case}\n\n`;
+          }
+        }
+        if (formatted) return marked.parse(formatted);
+      }
       return marked.parse(JSON.stringify(val));
     } catch {
       return String(val);

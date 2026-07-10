@@ -231,14 +231,44 @@ class WriterAgent:
                 for item in data.get('risk_factors', []):
                     full_text += f"- {item}\n"
                     
+                thesis_data = data.get('investment_thesis', '')
+                thesis_raw = thesis_data
+                if isinstance(thesis_data, dict):
+                    thesis_str = ""
+                    if 'bull_case' in thesis_data:
+                        thesis_str += "**Bull Case:**\n"
+                        bulls = thesis_data['bull_case']
+                        if isinstance(bulls, list):
+                            thesis_str += "\n".join(f"- {b}" for b in bulls) + "\n\n"
+                        else:
+                            thesis_str += f"{bulls}\n\n"
+                    if 'bear_case' in thesis_data:
+                        thesis_str += "**Bear Case:**\n"
+                        bears = thesis_data['bear_case']
+                        if isinstance(bears, list):
+                            thesis_str += "\n".join(f"- {b}" for b in bears) + "\n\n"
+                        else:
+                            thesis_str += f"{bears}\n\n"
+                    if not thesis_str:
+                        thesis_str = str(thesis_data)
+                    thesis_data = thesis_str
+
+                bull_case = data.get('bull_case', [])
+                if not bull_case and isinstance(thesis_raw, dict):
+                    bull_case = thesis_raw.get('bull_case', [])
+
+                bear_case = data.get('bear_case', [])
+                if not bear_case and isinstance(thesis_raw, dict):
+                    bear_case = thesis_raw.get('bear_case', [])
+
                 # Compile parsed dict
                 report = {
                     'summary': full_text[:400] + '...',
                     'executive_summary': data.get('executive_summary', ''),
                     'key_findings': data.get('key_findings', []),
-                    'thesis': data.get('investment_thesis', ''),
-                    'bull_case': data.get('bull_case', []),
-                    'bear_case': data.get('bear_case', []),
+                    'thesis': thesis_data,
+                    'bull_case': bull_case,
+                    'bear_case': bear_case,
                     'risks': data.get('risk_factors', []),
                     'catalysts': data.get('catalysts', []),
                     'full_text': full_text
